@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Leaderboard Kelompok Dinamis</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <style>
     /* Style tambahan untuk transisi animasi bergerak naik/turun */
     .leaderboard-item {
@@ -14,8 +15,8 @@
 </head>
 <body class="bg-slate-300 text-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
 
-  <div class="w-full max-w-2xl bg-[#9fa1ff] rounded-2xl shadow-2xl  p-6 mb-8">
-    <h1 class="text-2xl font-extrabold text-center text-white bg-clip-text text-transparent mb-6">
+  <div class="w-full max-w-2xl bg-[#9fa1ff] rounded-2xl shadow-2xl p-6 mb-8">
+    <h1 class="text-2xl font-extrabold text-center text-white mb-6">
       LEADERBOARD KELOMPOK
     </h1>
 
@@ -23,18 +24,18 @@
       <div class="flex-1">
         <label class="block text-xs font-semibold uppercase tracking-wider text-white mb-1">Nama Kelompok</label>
         <input type="text" id="groupName" required autocomplete="off"
-          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-200 focus:outline-none focus:border-cyan-500 transition border border-transparent focus:border-white/40"
           placeholder="Contoh: Kelompok A">
       </div>
       <div class="w-full sm:w-32">
         <label class="block text-xs font-semibold uppercase tracking-wider text-white mb-1">Skor</label>
         <input type="number" id="groupScore" required min="0"
-          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-200 focus:outline-none focus:border-cyan-500 transition border border-transparent focus:border-white/40"
           placeholder="0">
       </div>
       <div class="flex items-end">
         <button type="submit"
-          class="w-full sm:w-auto bg-[#AEE2FF] hover:from-cyan-600 hover:to-emerald-600 text-slate-600 font-bold px-6 py-2.5 rounded-lg shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition cursor-pointer">
+          class="w-full sm:w-auto bg-[#AEE2FF] text-slate-700 font-bold px-6 py-2.5 rounded-lg shadow-lg active:scale-95 transition cursor-pointer hover:bg-white">
           Submit Skor
         </button>
       </div>
@@ -46,18 +47,49 @@
         <p class="text-sm text-white">Masukkan nama kelompok dan skor di atas!</p>
       </div>
     </div>
+
+    <div class="mt-6 flex justify-center hidden" id="finishButtonContainer">
+      <button id="btnFinish" class="bg-[#AEE2FF] text-slate-950 font-black text-lg px-10 py-3.5 rounded-xl shadow-lg border border-white/20 hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer flex items-center gap-2">
+          Selesaikan Permainan
+      </button>
+    </div>
+  </div>
+
+  <div id="winnerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white text-slate-900 w-full max-w-md rounded-2xl p-6 shadow-2xl text-center transform scale-90 transition-transform duration-300" id="modalCard">
+      <div class="text-5xl mb-3 animate-bounce">🏆</div>
+      <h2 class="text-2xl font-black text-[#9fa1ff] tracking-wide mb-1">CONGRATULATION!</h2>
+      <p class="text-sm text-slate-500 mb-6">Kelompok dengan pencapaian skor tertinggi</p>
+      
+      <div class="bg-[#AEE2FF]/30 border border-[#AEE2FF] rounded-2xl py-5 px-4 mb-6">
+        <h3 id="winnerName" class="text-3xl font-black text-slate-800 tracking-tight truncate mb-1">-</h3>
+        <p class="text-slate-600 font-medium">Total Skor: <span id="winnerScore" class="font-mono font-black text-xl text-indigo-600">-</span></p>
+      </div>
+
+      <button id="btnCloseModal" class="w-full bg-[#9fa1ff] text-white font-bold py-3 rounded-xl hover:bg-[#8b8df2] active:scale-98 transition shadow-md cursor-pointer">
+        Tutup & Selesai
+      </button>
+    </div>
   </div>
 
   <script>
-    // State penyimpanan data kelompok
     let leaderboardData = [];
-    const ITEM_HEIGHT = 76; // Tinggi total satu baris komponen (tinggi elemen + gap)
+    const ITEM_HEIGHT = 76; 
 
     const scoreForm = document.getElementById('scoreForm');
     const groupNameInput = document.getElementById('groupName');
     const groupScoreInput = document.getElementById('groupScore');
     const leaderboardContainer = document.getElementById('leaderboardContainer');
     const emptyState = document.getElementById('emptyState');
+    
+    // Inisialisasi elemen baru untuk tombol & modal
+    const finishButtonContainer = document.getElementById('finishButtonContainer');
+    const btnFinish = document.getElementById('btnFinish');
+    const winnerModal = document.getElementById('winnerModal');
+    const modalCard = document.getElementById('modalCard');
+    const winnerName = document.getElementById('winnerName');
+    const winnerScore = document.getElementById('winnerScore');
+    const btnCloseModal = document.getElementById('btnCloseModal');
 
     scoreForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -86,42 +118,33 @@
       updateLeaderboardView();
     });
 
-    // --- FITUR BARU: FUNGSI UNTUK MENGHAPUS ITEM ---
     function deleteGroup(groupId) {
       const element = document.getElementById(groupId);
       if (element) {
-        // Jalankan animasi mengecil dan menghilang (fade-out)
         element.classList.add('opacity-0', 'scale-95');
-        
-        // Beri jeda 300ms agar animasi CSS selesai sebelum dihapus dari DOM
         setTimeout(() => {
-          // Saring array untuk membuang id kelompok yang dihapus
           leaderboardData = leaderboardData.filter(group => group.id !== groupId);
           element.remove();
-          
-          // Render ulang posisi item-item yang tersisa
           updateLeaderboardView();
         }, 300);
       }
     }
 
     function updateLeaderboardView() {
-      // 1. Urutkan data berdasarkan skor tertinggi
       leaderboardData.sort((a, b) => b.score - a.score);
 
-      // Cek kondisi data untuk menyembunyikan/menampilkan emptyState
       if (leaderboardData.length > 0) {
         emptyState.style.display = 'none';
+        finishButtonContainer.classList.remove('hidden'); // Tampilkan tombol selesai jika ada data
       } else {
         emptyState.style.display = 'flex';
-        leaderboardContainer.style.height = '300px'; // Kembalikan ke tinggi default
+        finishButtonContainer.classList.add('hidden'); // Sembunyikan jika kosong
+        leaderboardContainer.style.height = '300px'; 
         return;
       }
 
-      // Set tinggi container secara dinamis
       leaderboardContainer.style.height = `${leaderboardData.length * ITEM_HEIGHT}px`;
 
-      // 2. Render atau perbarui elemen HTML
       leaderboardData.forEach((group, index) => {
         let element = document.getElementById(group.id);
 
@@ -130,18 +153,17 @@
           element.id = group.id;
           element.className = 'leaderboard-item absolute left-0 right-0 bg-[#B5BAFF] text-white rounded-xl p-4 flex items-center justify-between shadow-md opacity-0 transform scale-95';
 
-          // Di dalam innerHTML, ditambahkan tombol button.delete-btn
           element.innerHTML = `
             <div class="flex items-center gap-4 flex-1 min-w-0">
               <div class="rank-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0"></div>
-              <span class="font-semibold text-lg text-slate-200 truncate group-name"></span>
+              <span class="font-semibold text-lg text-white truncate group-name"></span>
             </div>
             <div class="flex items-center gap-4 shrink-0">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs text-white">Skor:</span>
-                <span class="font-mono font-bold text-xl text-cyan-400 group-score"></span>
+                <span class="font-mono font-bold text-xl text-[#D9F9DF] group-score"></span>
               </div>
-              <button class="delete-btn text-white hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition cursor-pointer" title="Hapus Kelompok">
+              <button class="delete-btn text-white/80 hover:text-red-300 p-1.5 rounded-lg hover:bg-red-500/10 transition cursor-pointer" title="Hapus Kelompok">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-16v4M4 7h16" />
                 </svg>
@@ -149,14 +171,12 @@
             </div>
           `;
           
-          // Pasang event listener langsung pada tombol hapus kelompok yang baru dibuat
           element.querySelector('.delete-btn').addEventListener('click', () => deleteGroup(group.id));
           leaderboardContainer.appendChild(element);
           
           setTimeout(() => element.classList.remove('opacity-0', 'scale-95'), 50);
         }
 
-        // 3. Update Konten teks secara dinamis
         element.querySelector('.group-name').textContent = group.name;
         element.querySelector('.group-score').textContent = group.score.toLocaleString();
 
@@ -164,23 +184,70 @@
         const rank = index + 1;
         rankBadge.textContent = rank;
 
-        // Reset warna badge bawaan
         rankBadge.className = 'rank-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ';
         if (rank === 1) {
-          rankBadge.className += 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20';
+          rankBadge.className += 'bg-amber-400 text-slate-950 shadow-md';
         } else if (rank === 2) {
-          rankBadge.className += 'bg-slate-300 text-slate-950 shadow-md shadow-slate-300/20';
+          rankBadge.className += 'bg-slate-200 text-slate-950 shadow-sm';
         } else if (rank === 3) {
-          rankBadge.className += 'bg-amber-700 text-slate-100 shadow-md shadow-amber-700/20';
+          rankBadge.className += 'bg-orange-400 text-white';
         } else {
-          rankBadge.className += 'bg-slate-950 text-slate-400 border border-slate-800';
+          rankBadge.className += 'bg-slate-500 text-white border border-white/20';
         }
 
-        // 4. ANIMASI UTAMA: Geser posisi vertikal
         const targetY = index * ITEM_HEIGHT;
         element.style.transform = `translateY(${targetY}px)`;
       });
     }
+
+    // --- LOGIKA EMIT PARTY POPPER & MODAL POPUP ---
+    btnFinish.addEventListener('click', () => {
+      if (leaderboardData.length === 0) return;
+
+      // Karena array sudah otomatis terurut, indeks 0 adalah juara tertinggi (Teratas)
+      const winner = leaderboardData[0];
+
+      // Masukkan data juara ke dalam struktur text modal popup
+      winnerName.textContent = winner.name;
+      winnerScore.textContent = winner.score.toLocaleString();
+
+      // 1. Eksekusi Efek Animasi Ledakan Party Popper Kiri & Kanan
+      const duration = 3 * 1000;
+      const end = Date.now() + duration;
+
+      (function frame() {
+        // Tembakan Confetti Sisi Kiri
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.8 },
+          colors: ['#9fa1ff', '#B5BAFF', '#AEE2FF', '#D9F9DF']
+        });
+        // Tembakan Confetti Sisi Kanan
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.8 },
+          colors: ['#9fa1ff', '#B5BAFF', '#AEE2FF', '#D9F9DF']
+        });
+
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      }());
+
+      // 2. Munculkan Modal Popup dengan transisi CSS halus
+      winnerModal.classList.remove('opacity-0', 'pointer-events-none');
+      modalCard.classList.remove('scale-90');
+    });
+
+    // Fungsi menutup modal popup kembali
+    btnCloseModal.addEventListener('click', () => {
+      winnerModal.classList.add('opacity-0', 'pointer-events-none');
+      modalCard.classList.add('scale-90');
+    });
   </script>
 </body>
 </html>
