@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leaderboard Kelompok Dinamis</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    /* Style tambahan untuk transisi animasi bergerak naik/turun */
+    .leaderboard-item {
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+    }
+  </style>
+</head>
+<body class="bg-slate-300 text-slate-100 min-h-screen flex flex-col items-center py-10 px-4">
+
+  <div class="w-full max-w-2xl bg-[#9fa1ff] rounded-2xl shadow-2xl  p-6 mb-8">
+    <h1 class="text-2xl font-extrabold text-center text-white bg-clip-text text-transparent mb-6">
+      LEADERBOARD KELOMPOK
+    </h1>
+
+    <form id="scoreForm" class="flex flex-col sm:flex-row gap-4 mb-8 bg-[#B5BAFF] p-4 rounded-xl">
+      <div class="flex-1">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-white mb-1">Nama Kelompok</label>
+        <input type="text" id="groupName" required autocomplete="off"
+          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+          placeholder="Contoh: Kelompok A">
+      </div>
+      <div class="w-full sm:w-32">
+        <label class="block text-xs font-semibold uppercase tracking-wider text-white mb-1">Skor</label>
+        <input type="number" id="groupScore" required min="0"
+          class="w-full bg-[#9FA1FF] rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+          placeholder="0">
+      </div>
+      <div class="flex items-end">
+        <button type="submit"
+          class="w-full sm:w-auto bg-[#AEE2FF] hover:from-cyan-600 hover:to-emerald-600 text-slate-600 font-bold px-6 py-2.5 rounded-lg shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition cursor-pointer">
+          Submit Skor
+        </button>
+      </div>
+    </form>
+
+    <div class="relative min-h-[300px]" id="leaderboardContainer">
+      <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+        <p class="text-lg text-white">Belum ada data kelompok.</p>
+        <p class="text-sm text-white">Masukkan nama kelompok dan skor di atas!</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State penyimpanan data kelompok
+    let leaderboardData = [];
+    const ITEM_HEIGHT = 76; // Tinggi total satu baris komponen (tinggi elemen + gap)
+
+    const scoreForm = document.getElementById('scoreForm');
+    const groupNameInput = document.getElementById('groupName');
+    const groupScoreInput = document.getElementById('groupScore');
+    const leaderboardContainer = document.getElementById('leaderboardContainer');
+    const emptyState = document.getElementById('emptyState');
+
+    scoreForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const nameInput = groupNameInput.value.trim();
+      const scoreInput = parseInt(groupScoreInput.value);
+
+      if (!nameInput || isNaN(scoreInput)) return;
+
+      const existingGroup = leaderboardData.find(g => g.name.toLowerCase() === nameInput.toLowerCase());
+
+      if (existingGroup) {
+        existingGroup.score += scoreInput;
+      } else {
+        leaderboardData.push({
+          id: 'group_' + Date.now() + Math.random().toString(36).substr(2, 5),
+          name: nameInput,
+          score: scoreInput
+        });
+      }
+
+      groupNameInput.value = '';
+      groupScoreInput.value = '';
+      groupNameInput.focus();
+
+      updateLeaderboardView();
+    });
+
+    // --- FITUR BARU: FUNGSI UNTUK MENGHAPUS ITEM ---
+    function deleteGroup(groupId) {
+      const element = document.getElementById(groupId);
+      if (element) {
+        // Jalankan animasi mengecil dan menghilang (fade-out)
+        element.classList.add('opacity-0', 'scale-95');
+        
+        // Beri jeda 300ms agar animasi CSS selesai sebelum dihapus dari DOM
+        setTimeout(() => {
+          // Saring array untuk membuang id kelompok yang dihapus
+          leaderboardData = leaderboardData.filter(group => group.id !== groupId);
+          element.remove();
+          
+          // Render ulang posisi item-item yang tersisa
+          updateLeaderboardView();
+        }, 300);
+      }
+    }
+
+    function updateLeaderboardView() {
+      // 1. Urutkan data berdasarkan skor tertinggi
+      leaderboardData.sort((a, b) => b.score - a.score);
+
+      // Cek kondisi data untuk menyembunyikan/menampilkan emptyState
+      if (leaderboardData.length > 0) {
+        emptyState.style.display = 'none';
+      } else {
+        emptyState.style.display = 'flex';
+        leaderboardContainer.style.height = '300px'; // Kembalikan ke tinggi default
+        return;
+      }
+
+      // Set tinggi container secara dinamis
+      leaderboardContainer.style.height = `${leaderboardData.length * ITEM_HEIGHT}px`;
+
+      // 2. Render atau perbarui elemen HTML
+      leaderboardData.forEach((group, index) => {
+        let element = document.getElementById(group.id);
+
+        if (!element) {
+          element = document.createElement('div');
+          element.id = group.id;
+          element.className = 'leaderboard-item absolute left-0 right-0 bg-[#B5BAFF] text-white rounded-xl p-4 flex items-center justify-between shadow-md opacity-0 transform scale-95';
+
+          // Di dalam innerHTML, ditambahkan tombol button.delete-btn
+          element.innerHTML = `
+            <div class="flex items-center gap-4 flex-1 min-w-0">
+              <div class="rank-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0"></div>
+              <span class="font-semibold text-lg text-slate-200 truncate group-name"></span>
+            </div>
+            <div class="flex items-center gap-4 shrink-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs text-white">Skor:</span>
+                <span class="font-mono font-bold text-xl text-cyan-400 group-score"></span>
+              </div>
+              <button class="delete-btn text-white hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition cursor-pointer" title="Hapus Kelompok">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-16v4M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          `;
+          
+          // Pasang event listener langsung pada tombol hapus kelompok yang baru dibuat
+          element.querySelector('.delete-btn').addEventListener('click', () => deleteGroup(group.id));
+          leaderboardContainer.appendChild(element);
+          
+          setTimeout(() => element.classList.remove('opacity-0', 'scale-95'), 50);
+        }
+
+        // 3. Update Konten teks secara dinamis
+        element.querySelector('.group-name').textContent = group.name;
+        element.querySelector('.group-score').textContent = group.score.toLocaleString();
+
+        const rankBadge = element.querySelector('.rank-badge');
+        const rank = index + 1;
+        rankBadge.textContent = rank;
+
+        // Reset warna badge bawaan
+        rankBadge.className = 'rank-badge w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ';
+        if (rank === 1) {
+          rankBadge.className += 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20';
+        } else if (rank === 2) {
+          rankBadge.className += 'bg-slate-300 text-slate-950 shadow-md shadow-slate-300/20';
+        } else if (rank === 3) {
+          rankBadge.className += 'bg-amber-700 text-slate-100 shadow-md shadow-amber-700/20';
+        } else {
+          rankBadge.className += 'bg-slate-950 text-slate-400 border border-slate-800';
+        }
+
+        // 4. ANIMASI UTAMA: Geser posisi vertikal
+        const targetY = index * ITEM_HEIGHT;
+        element.style.transform = `translateY(${targetY}px)`;
+      });
+    }
+  </script>
+</body>
+</html>
